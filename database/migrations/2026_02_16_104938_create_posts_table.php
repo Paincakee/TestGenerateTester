@@ -12,11 +12,13 @@ return new class extends Migration {
     {
         Schema::disableForeignKeyConstraints();
 
-        Schema::create('likes', function (Blueprint $table) {
+        Schema::create('posts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('post_id')->constrained();
+            $table->string('name');
+            $table->text('description');
+            $table->text('tester');
             $table->foreignId('user_id')->constrained();
-            $table->unique(['post_id', 'user_id']);
+            $table->dateTime('archived_at')->nullable();
             $table->timestamps();
         });
 
@@ -28,6 +30,6 @@ return new class extends Migration {
      */
     public function down(): void
     {
-        Schema::dropIfExists('likes');
+        Schema::dropIfExists('posts');
     }
 };

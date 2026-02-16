@@ -3,6 +3,7 @@ models:
     name: string
     description: text
     tester: text
+    jaja: text
     user_id: id foreign:users
     archived_at: datetime nullable
     relationships:

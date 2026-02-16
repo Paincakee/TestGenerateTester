@@ -57,6 +57,9 @@
         "bp:delta": [
             "@php artisan bp:delta"
         ],
+        "bp:snapshot": [
+            "@php artisan bp:snapshot"
+        ],
         "bp:routes": [
             "@php artisan bp:routes:sync"
         ],

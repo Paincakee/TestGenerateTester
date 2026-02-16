@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Collection;
  * @property string $name
  * @property string $description
  * @property string $tester
+ * @property string $jaja
  * @property int $user_id
  * @property Carbon $archived_at
  * @property Carbon $created_at
@@ -39,6 +40,7 @@ class Post extends Model
         'name',
         'description',
         'tester',
+        'jaja',
         'user_id',
         'archived_at',
     ];

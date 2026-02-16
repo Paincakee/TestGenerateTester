@@ -1,185 +1,26 @@
 <?php
 
-use App\Http\Controllers\Controller;
-use Illuminate\Contracts\Filesystem\FileNotFoundException;
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Symfony\Component\Yaml\Yaml;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
-
-Artisan::command('tests:generate-routes {controller? : Controller class/basename} {--force : Overwrite existing generated files} {--from-methods : Generate from public controller methods when no route exists}', function (?string $controller = null) {
-    $controllerFilter = $controller ? Str::lower($controller) : null;
-    $groupedRoutes = [];
-
-    /** @var Route $route */
-    foreach (app('router')->getRoutes() as $route) {
-        $actionName = $route->getActionName();
-
-        if ($actionName === 'Closure' || ! str_contains($actionName, '@')) {
-            continue;
-        }
-
-        [$controllerClass, $action] = explode('@', $actionName);
-        $controllerBaseName = class_basename($controllerClass);
-
-        if ($controllerFilter !== null) {
-            $matches = in_array($controllerFilter, [
-                Str::lower($controllerClass),
-                Str::lower($controllerBaseName),
-                Str::lower(Str::before($controllerBaseName, 'Controller')),
-            ], true);
-
-            if (! $matches) {
-                continue;
-            }
-        }
-
-        $methods = array_values(array_diff($route->methods(), ['HEAD']));
-
-        foreach ($methods as $httpMethod) {
-            $groupedRoutes[$controllerClass][] = [
-                'http_method' => $httpMethod,
-                'uri' => '/'.$route->uri(),
-                'route_name' => $route->getName() ?? '-',
-                'action' => $action,
-            ];
-        }
-    }
-
-    if ($groupedRoutes === [] && $this->option('from-methods')) {
-        $controllerFiles = File::allFiles(app_path('Http/Controllers'));
-
-        foreach ($controllerFiles as $controllerFile) {
-            $relativePath = str_replace('/', '\\', Str::before($controllerFile->getRelativePathname(), '.php'));
-            $controllerClass = 'App\\Http\\Controllers\\'.$relativePath;
-
-            if (! class_exists($controllerClass) || $controllerClass === Controller::class) {
-                continue;
-            }
-
-            $controllerBaseName = class_basename($controllerClass);
-
-            if ($controllerFilter !== null) {
-                $matches = in_array($controllerFilter, [
-                    Str::lower($controllerClass),
-                    Str::lower($controllerBaseName),
-                    Str::lower(Str::before($controllerBaseName, 'Controller')),
-                ], true);
-
-                if (! $matches) {
-                    continue;
-                }
-            }
-
-            $resourceSegment = Str::of($controllerBaseName)
-                ->before('Controller')
-                ->kebab()
-                ->plural()
-                ->toString();
-
-            $reflectionClass = new ReflectionClass($controllerClass);
-
-            foreach ($reflectionClass->getMethods(ReflectionMethod::IS_PUBLIC) as $reflectionMethod) {
-                if ($reflectionMethod->getDeclaringClass()->getName() !== $controllerClass) {
-                    continue;
-                }
-
-                $methodName = $reflectionMethod->getName();
-
-                if (str_starts_with($methodName, '__')) {
-                    continue;
-                }
-
-                $httpMethod = 'GET';
-                $uri = "/{$resourceSegment}";
-
-                if ($methodName === 'create') {
-                    $uri = "/{$resourceSegment}/create";
-                } elseif ($methodName === 'store') {
-                    $httpMethod = 'POST';
-                } elseif ($methodName === 'show') {
-                    $uri = "/{$resourceSegment}/{id}";
-                } elseif ($methodName === 'edit') {
-                    $uri = "/{$resourceSegment}/{id}/edit";
-                } elseif ($methodName === 'update') {
-                    $httpMethod = 'PUT';
-                    $uri = "/{$resourceSegment}/{id}";
-                } elseif ($methodName === 'destroy') {
-                    $httpMethod = 'DELETE';
-                    $uri = "/{$resourceSegment}/{id}";
-                } elseif ($methodName !== 'index') {
-                    $uri = "/{$resourceSegment}/{$methodName}";
-                }
-
-                $groupedRoutes[$controllerClass][] = [
-                    'http_method' => $httpMethod,
-                    'uri' => $uri,
-                    'route_name' => '-',
-                    'action' => $methodName,
-                ];
-            }
-        }
-    }
-
-    if ($groupedRoutes === []) {
-        $this->warn('No controller routes/methods found for the given filter.');
-
-        return self::SUCCESS;
-    }
-
-    $generatedCount = 0;
-    $skippedCount = 0;
-
-    foreach ($groupedRoutes as $controllerClass => $routes) {
-        $controllerBaseName = class_basename($controllerClass);
-        $testPath = base_path("tests/Feature/{$controllerBaseName}Test.php");
-
-        if (File::exists($testPath) && ! $this->option('force')) {
-            $this->warn("Skipped existing file: {$testPath}");
-            $skippedCount++;
-
-            continue;
-        }
-
-        usort($routes, fn (array $a, array $b) => [$a['uri'], $a['http_method']] <=> [$b['uri'], $b['http_method']]);
-
-        $content = "<?php\n\n";
-        $content .= "use {$controllerClass};\n\n";
-
-        foreach ($routes as $route) {
-            $title = "[{$route['http_method']}] {$route['uri']} uses {$controllerBaseName}::{$route['action']}";
-            $incompleteMessage = "Generated stub for route {$route['http_method']} {$route['uri']} (name: {$route['route_name']}). Replace with real request and assertions.";
-
-            $content .= 'it('.var_export($title, true).", function () {\n";
-            $content .= '    $this->markTestIncomplete('.var_export($incompleteMessage, true).");\n";
-            $content .= "})->covers([{$controllerBaseName}::class, '{$route['action']}']);\n\n";
-        }
-
-        File::ensureDirectoryExists(dirname($testPath));
-        File::put($testPath, $content);
-
-        $this->info("Generated {$testPath}");
-        $generatedCount++;
-    }
-
-    $this->newLine();
-    $this->info("Done. Generated: {$generatedCount}, skipped: {$skippedCount}");
-
-    return self::SUCCESS;
-})->purpose('Generate Pest Feature test stubs from controller routes');
-
+/*
+|--------------------------------------------------------------------------
+| Blueprint Delta Command
+|--------------------------------------------------------------------------
+|
+| Generates additive (delta) migrations by comparing the current draft with
+| a stored snapshot in storage/app/blueprint-delta. This avoids rewriting
+| existing create-table migrations for mature projects.
+|
+*/
 Artisan::command('bp:delta {draft : Path to Blueprint draft yaml}', function (string $draft) {
     $draftPath = Str::startsWith($draft, '/')
         ? $draft
         : base_path($draft);
 
-    if (! File::exists($draftPath)) {
+    if (!File::exists($draftPath)) {
         $this->error("Draft file not found: {$draftPath}");
 
         return self::FAILURE;
@@ -194,17 +35,18 @@ Artisan::command('bp:delta {draft : Path to Blueprint draft yaml}', function (st
     }
 
     if ($result['status'] === 'initialized') {
-        $this->info('Snapshot initialized. Run the command again after draft changes to generate delta migrations.');
-        $this->line('Snapshot: '.$result['snapshot_file']);
+        $this->warn('No snapshot found for this draft.');
+        $this->line('Initialize it first with:');
+        $this->line("php artisan bp:snapshot {$draft}");
 
-        return self::SUCCESS;
+        return self::FAILURE;
     }
 
     foreach ($result['migrations'] as $migration) {
         $this->info("Created migration: {$migration}");
     }
 
-    $this->line('Snapshot updated: '.$result['snapshot_file']);
+    $this->line('Snapshot updated: ' . $result['snapshot_file']);
 
     if ($result['created'] === 0) {
         $this->info('No added columns detected. No migration generated.');
@@ -213,12 +55,58 @@ Artisan::command('bp:delta {draft : Path to Blueprint draft yaml}', function (st
     return self::SUCCESS;
 })->purpose('Generate add-column delta migrations by comparing a draft against its previous snapshot');
 
+/*
+|--------------------------------------------------------------------------
+| Blueprint Snapshot Command
+|--------------------------------------------------------------------------
+|
+| Initializes or refreshes the draft snapshot used by bp:delta / bp:smart.
+| Run this once when onboarding an existing project state.
+|
+*/
+Artisan::command('bp:snapshot {draft : Path to Blueprint draft yaml} {--force : Overwrite existing snapshot}', function (string $draft) {
+    $draftPath = Str::startsWith($draft, '/')
+        ? $draft
+        : base_path($draft);
+
+    if (!File::exists($draftPath)) {
+        $this->error("Draft file not found: {$draftPath}");
+
+        return self::FAILURE;
+    }
+
+    $snapshotFile = bpDeltaSnapshotFile($draftPath);
+
+    if (File::exists($snapshotFile) && ! $this->option('force')) {
+        $this->warn("Snapshot already exists: {$snapshotFile}");
+        $this->line('Use --force to overwrite it.');
+
+        return self::SUCCESS;
+    }
+
+    bpDeltaWriteSnapshot($draftPath);
+    $this->info('Snapshot written: '.$snapshotFile);
+
+    return self::SUCCESS;
+})->purpose('Initialize or refresh draft snapshot used by bp:delta and bp:smart');
+
+/*
+|--------------------------------------------------------------------------
+| Blueprint Smart Command
+|--------------------------------------------------------------------------
+|
+| One-command workflow for daily development:
+| 1) Run delta detection to generate add-column migrations when needed.
+| 2) Run Blueprint build with a safe generator set.
+| 3) Optionally include controller/test generation via --full.
+|
+*/
 Artisan::command('bp:smart {draft : Path to Blueprint draft yaml} {--full : Include controller and test generation}', function (string $draft) {
     $draftPath = Str::startsWith($draft, '/')
         ? $draft
         : base_path($draft);
 
-    if (! File::exists($draftPath)) {
+    if (!File::exists($draftPath)) {
         $this->error("Draft file not found: {$draftPath}");
 
         return self::FAILURE;
@@ -233,31 +121,23 @@ Artisan::command('bp:smart {draft : Path to Blueprint draft yaml} {--full : Incl
     }
 
     if ($result['status'] === 'initialized') {
-        $this->line('Snapshot initialized: '.$result['snapshot_file']);
-        $this->line('Running blueprint safe build (first run)...');
-        $exitCode = bpRunBlueprintBuild(
-            $draftPath,
-            bpSmartOnlySet(
-                false,
-                (bool) $this->option('full'),
-                bpDraftNeedsCreateMigrations($draftPath)
-            )
-        );
-        $this->line(Artisan::output());
+        $this->warn('No snapshot found for this draft.');
+        $this->line('Initialize it first with:');
+        $this->line("php artisan bp:snapshot {$draft}");
 
-        return $exitCode;
+        return self::FAILURE;
     }
 
     if ($result['created'] > 0) {
         foreach ($result['migrations'] as $migration) {
             $this->info("Created migration: {$migration}");
         }
-        $this->line('Snapshot updated: '.$result['snapshot_file']);
+        $this->line('Snapshot updated: ' . $result['snapshot_file']);
         $this->line('Running blueprint safe build without migration generation...');
 
         $exitCode = bpRunBlueprintBuild(
             $draftPath,
-            bpSmartOnlySet(true, (bool) $this->option('full'), false)
+            bpSmartOnlySet(true, (bool)$this->option('full'), false)
         );
         $this->line(Artisan::output());
 
@@ -269,7 +149,7 @@ Artisan::command('bp:smart {draft : Path to Blueprint draft yaml} {--full : Incl
         $draftPath,
         bpSmartOnlySet(
             false,
-            (bool) $this->option('full'),
+            (bool)$this->option('full'),
             bpDraftNeedsCreateMigrations($draftPath)
         )
     );
@@ -278,12 +158,22 @@ Artisan::command('bp:smart {draft : Path to Blueprint draft yaml} {--full : Incl
     return $exitCode;
 })->purpose('Run delta migration generation first, then execute the appropriate safe Blueprint build');
 
+/*
+|--------------------------------------------------------------------------
+| Blueprint Route Sync Command
+|--------------------------------------------------------------------------
+|
+| Appends only missing apiResource routes from a draft into routes/api.php.
+| Existing routes are kept as-is, so this command is safe for projects with
+| custom route logic.
+|
+*/
 Artisan::command('bp:routes:sync {draft : Path to Blueprint draft yaml}', function (string $draft) {
     $draftPath = Str::startsWith($draft, '/')
         ? $draft
         : base_path($draft);
 
-    if (! File::exists($draftPath)) {
+    if (!File::exists($draftPath)) {
         $this->error("Draft file not found: {$draftPath}");
 
         return self::FAILURE;
@@ -297,13 +187,15 @@ Artisan::command('bp:routes:sync {draft : Path to Blueprint draft yaml}', functi
         return self::SUCCESS;
     }
 
-    $this->info('Added routes: '.$result['added_routes']);
-    $this->line('Added imports: '.$result['added_imports']);
+    $this->info('Added routes: ' . $result['added_routes']);
+    $this->line('Added imports: ' . $result['added_imports']);
 
     return self::SUCCESS;
 })->purpose('Append only missing apiResource routes from draft to routes/api.php');
 
 /**
+ * Normalize draft model definitions to a comparable array shape.
+ *
  * @param array<string, mixed> $models
  *
  * @return array<string, array<string, string>>
@@ -313,24 +205,24 @@ function bpDeltaNormalizeModels(array $models): array
     $normalized = [];
 
     foreach ($models as $modelName => $definition) {
-        if (! is_array($definition)) {
+        if (!is_array($definition)) {
             continue;
         }
 
         $columns = [];
         foreach ($definition as $key => $value) {
-            if (in_array((string) $key, ['relationships', 'indexes'], true)) {
+            if (in_array((string)$key, ['relationships', 'indexes'], true)) {
                 continue;
             }
 
-            if (! is_string($value)) {
+            if (!is_string($value)) {
                 continue;
             }
 
-            $columns[(string) $key] = trim($value);
+            $columns[(string)$key] = trim($value);
         }
 
-        $normalized[(string) $modelName] = $columns;
+        $normalized[(string)$modelName] = $columns;
     }
 
     ksort($normalized);
@@ -339,23 +231,26 @@ function bpDeltaNormalizeModels(array $models): array
 }
 
 /**
+ * Generate delta migrations by comparing the current draft with its snapshot.
+ *
+ * First run only initializes snapshot state. Next runs create additive
+ * migrations for newly added columns.
+ *
  * @param string $draftPath
+ *
  * @return array{
  *     status: 'initialized'|'processed'|'no_models',
  *     created: int,
  *     migrations: array<int, string>,
  *     snapshot_file: string
  * }
- * @throws FileNotFoundException
  */
 function bpDeltaGenerateMigrations(string $draftPath): array
 {
     $parsed = Yaml::parseFile($draftPath);
     $models = is_array($parsed['models'] ?? null) ? $parsed['models'] : [];
 
-    $snapshotDir = storage_path('app/blueprint-delta');
-    File::ensureDirectoryExists($snapshotDir);
-    $snapshotFile = $snapshotDir.'/'.pathinfo($draftPath, PATHINFO_FILENAME).'.json';
+    $snapshotFile = bpDeltaSnapshotFile($draftPath);
 
     if ($models === []) {
         return [
@@ -368,12 +263,10 @@ function bpDeltaGenerateMigrations(string $draftPath): array
 
     $currentSnapshot = bpDeltaNormalizeModels($models);
     $previousSnapshot = File::exists($snapshotFile)
-        ? json_decode((string) File::get($snapshotFile), true)
+        ? json_decode((string)File::get($snapshotFile), true)
         : null;
 
-    if (! is_array($previousSnapshot)) {
-        File::put($snapshotFile, json_encode($currentSnapshot, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-
+    if (!is_array($previousSnapshot)) {
         return [
             'status' => 'initialized',
             'created' => 0,
@@ -394,7 +287,7 @@ function bpDeltaGenerateMigrations(string $draftPath): array
         }
 
         $table = Str::snake(Str::pluralStudly($modelName));
-        $migrationName = 'add_'.implode('_and_', array_keys($added))."_to_{$table}_table";
+        $migrationName = 'add_' . implode('_and_', array_keys($added)) . "_to_{$table}_table";
         $timestamp = now()->format('Y_m_d_His');
         $fileName = "{$timestamp}_{$migrationName}.php";
         $filePath = database_path("migrations/{$fileName}");
@@ -447,12 +340,12 @@ PHP;
             $migration = str_replace($addLines[0], implode(PHP_EOL, $addLines), $migration);
         }
 
-        File::put($filePath, $migration.PHP_EOL);
+        File::put($filePath, $migration . PHP_EOL);
         $created++;
         $migrations[] = $fileName;
     }
 
-    File::put($snapshotFile, json_encode($currentSnapshot, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    bpDeltaWriteSnapshot($draftPath, $currentSnapshot);
 
     return [
         'status' => 'processed',
@@ -462,6 +355,37 @@ PHP;
     ];
 }
 
+function bpDeltaSnapshotFile(string $draftPath): string
+{
+    $snapshotDir = storage_path('app/blueprint-delta');
+    File::ensureDirectoryExists($snapshotDir);
+
+    return $snapshotDir . '/' . pathinfo($draftPath, PATHINFO_FILENAME) . '.json';
+}
+
+/**
+ * @param array<string, array<string, string>>|null $normalizedModels
+ */
+function bpDeltaWriteSnapshot(string $draftPath, ?array $normalizedModels = null): void
+{
+    if ($normalizedModels === null) {
+        $parsed = Yaml::parseFile($draftPath);
+        $models = is_array($parsed['models'] ?? null) ? $parsed['models'] : [];
+        $normalizedModels = bpDeltaNormalizeModels($models);
+    }
+
+    File::put(
+        bpDeltaSnapshotFile($draftPath),
+        json_encode($normalizedModels, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+    );
+}
+
+/**
+ * Execute Blueprint build with safe defaults used by bp:smart.
+ *
+ * @param string $draftPath
+ * @param string|null $only
+ */
 function bpRunBlueprintBuild(string $draftPath, ?string $only = null): int
 {
     $params = [
@@ -476,6 +400,13 @@ function bpRunBlueprintBuild(string $draftPath, ?string $only = null): int
     return Artisan::call('blueprint:build', $params);
 }
 
+/**
+ * Resolve the --only generator set used by bp:smart.
+ *
+ * @param bool $deltaCreated Whether a delta migration was generated.
+ * @param bool $full Whether to include controllers/tests.
+ * @param bool $includeMigrations Whether create migrations should run.
+ */
 function bpSmartOnlySet(bool $deltaCreated, bool $full, bool $includeMigrations): string
 {
     if ($full) {
@@ -494,13 +425,18 @@ function bpSmartOnlySet(bool $deltaCreated, bool $full, bool $includeMigrations)
             : 'models,factories,requests,resources');
 }
 
+/**
+ * Determine whether base create-table migrations are still needed for draft models.
+ *
+ * @param string $draftPath
+ */
 function bpDraftNeedsCreateMigrations(string $draftPath): bool
 {
     $parsed = Yaml::parseFile($draftPath);
     $models = is_array($parsed['models'] ?? null) ? array_keys($parsed['models']) : [];
 
     foreach ($models as $modelName) {
-        $table = Str::snake(Str::pluralStudly((string) $modelName));
+        $table = Str::snake(Str::pluralStudly((string)$modelName));
         $pattern = database_path("migrations/*_create_{$table}_table.php");
         $matches = glob($pattern);
 
@@ -513,6 +449,8 @@ function bpDraftNeedsCreateMigrations(string $draftPath): bool
 }
 
 /**
+ * Sync only missing apiResource routes from draft controllers into routes/api.php.
+ *
  * @return array{added_routes: int, added_imports: int}
  */
 function bpSyncApiRoutesFromDraft(string $draftPath): array
@@ -528,7 +466,7 @@ function bpSyncApiRoutesFromDraft(string $draftPath): array
 
     $apiPath = base_path('routes/api.php');
 
-    if (! File::exists($apiPath)) {
+    if (!File::exists($apiPath)) {
         File::put($apiPath, <<<PHP
 <?php
 
@@ -540,15 +478,15 @@ PHP
         );
     }
 
-    $content = (string) File::get($apiPath);
+    $content = (string)File::get($apiPath);
 
     preg_match_all("/Route::apiResource\\('([^']+)'\\s*,\\s*[A-Za-z0-9_\\\\\\\\]+::class\\);/", $content, $existingMatches);
     $existingSlugs = $existingMatches[1] ?? [];
-    $existingSlugs = array_map(static fn (string $slug) => strtolower($slug), $existingSlugs);
+    $existingSlugs = array_map(static fn(string $slug) => strtolower($slug), $existingSlugs);
 
     $missing = [];
     foreach ($controllers as $slug => $controllerClass) {
-        if (! in_array(strtolower($slug), $existingSlugs, true)) {
+        if (!in_array(strtolower($slug), $existingSlugs, true)) {
             $missing[$slug] = $controllerClass;
         }
     }
@@ -567,49 +505,49 @@ PHP
 
     $addedImports = 0;
     foreach ($missing as $controllerClass) {
-        $import = 'App\\Http\\Controllers\\'.$controllerClass;
-        if (! in_array($import, $existingUses, true)) {
+        $import = 'App\\Http\\Controllers\\' . $controllerClass;
+        if (!in_array($import, $existingUses, true)) {
             $insertPos = strpos($content, 'Route::middleware(');
             if ($insertPos === false) {
                 $insertPos = strlen($content);
             }
 
             $content = substr($content, 0, $insertPos)
-                .'use '.$import.';'.PHP_EOL
-                .substr($content, $insertPos);
+                . 'use ' . $import . ';' . PHP_EOL
+                . substr($content, $insertPos);
             $existingUses[] = $import;
             $addedImports++;
         }
     }
 
-    if (! str_contains($content, "Route::middleware(['auth:sanctum'])->group(function () {")) {
-        $content = rtrim($content).PHP_EOL.PHP_EOL."Route::middleware(['auth:sanctum'])->group(function () {".PHP_EOL.'});'.PHP_EOL;
+    if (!str_contains($content, "Route::middleware(['auth:sanctum'])->group(function () {")) {
+        $content = rtrim($content) . PHP_EOL . PHP_EOL . "Route::middleware(['auth:sanctum'])->group(function () {" . PHP_EOL . '});' . PHP_EOL;
     }
 
     $routeLines = array_map(
-        static fn (string $slug, string $controllerClass): string => "    Route::apiResource('{$slug}', {$controllerClass}::class);",
+        static fn(string $slug, string $controllerClass): string => "    Route::apiResource('{$slug}', {$controllerClass}::class);",
         array_keys($missing),
         array_values($missing)
     );
 
     $groupPattern = "/Route::middleware\\(\\['auth:sanctum'\\]\\)->group\\(function\\s*\\(\\)\\s*\\{([\\s\\S]*?)\\}\\);/";
-    $content = (string) preg_replace_callback(
+    $content = (string)preg_replace_callback(
         $groupPattern,
         static function (array $matches) use ($routeLines): string {
             $currentBody = trim($matches[1]);
             $newBody = $currentBody === ''
                 ? implode(PHP_EOL, $routeLines)
-                : $currentBody.PHP_EOL.implode(PHP_EOL, $routeLines);
+                : $currentBody . PHP_EOL . implode(PHP_EOL, $routeLines);
 
-            return "Route::middleware(['auth:sanctum'])->group(function () {".PHP_EOL
-                .$newBody.PHP_EOL
-                .'});';
+            return "Route::middleware(['auth:sanctum'])->group(function () {" . PHP_EOL
+                . $newBody . PHP_EOL
+                . '});';
         },
         $content,
         1
     );
 
-    File::put($apiPath, rtrim($content).PHP_EOL);
+    File::put($apiPath, rtrim($content) . PHP_EOL);
 
     return [
         'added_routes' => count($missing),
@@ -618,6 +556,8 @@ PHP
 }
 
 /**
+ * Extract API resource controllers from draft controllers definition.
+ *
  * @return array<string, string> slug => controller class basename
  */
 function bpDraftApiControllers(string $draftPath): array
@@ -628,7 +568,7 @@ function bpDraftApiControllers(string $draftPath): array
     $result = [];
 
     foreach ($controllers as $controllerName => $definition) {
-        if (! is_array($definition)) {
+        if (!is_array($definition)) {
             continue;
         }
 
@@ -636,18 +576,21 @@ function bpDraftApiControllers(string $draftPath): array
             continue;
         }
 
-        $base = (string) Str::of((string) $controllerName)->afterLast('\\')->afterLast('/')->trim();
+        $base = (string)Str::of((string)$controllerName)->afterLast('\\')->afterLast('/')->trim();
         if ($base === '') {
             continue;
         }
 
         $slug = Str::plural(Str::kebab($base));
-        $result[$slug] = $base.'Controller';
+        $result[$slug] = $base . 'Controller';
     }
 
     return $result;
 }
 
+/**
+ * Build one schema line for an additive migration based on Blueprint column syntax.
+ */
 function bpDeltaBuildColumnLine(string $column, string $definition): string
 {
     $tokens = preg_split('/\s+/', trim($definition)) ?: [];
@@ -669,10 +612,10 @@ function bpDeltaBuildColumnLine(string $column, string $definition): string
         $line = "            \$table->{$dataType}('{$column}'";
 
         if ($dataType === 'enum') {
-            $quoted = array_map(fn (string $value) => "'".str_replace("'", "\\'", $value)."'", $attributes);
-            $line .= ', ['.implode(', ', $quoted).']';
+            $quoted = array_map(fn(string $value) => "'" . str_replace("'", "\\'", $value) . "'", $attributes);
+            $line .= ', [' . implode(', ', $quoted) . ']';
         } elseif ($attributes !== []) {
-            $line .= ', '.implode(', ', $attributes);
+            $line .= ', ' . implode(', ', $attributes);
         }
 
         $line .= ')';
@@ -695,8 +638,8 @@ function bpDeltaBuildColumnLine(string $column, string $definition): string
         }
 
         if (Str::startsWith($modifier, 'default:')) {
-            $value = (string) Str::after($modifier, 'default:');
-            $line .= '->default('.bpDeltaRenderDefaultValue($value).')';
+            $value = (string)Str::after($modifier, 'default:');
+            $line .= '->default(' . bpDeltaRenderDefaultValue($value) . ')';
             continue;
         }
 
@@ -705,20 +648,26 @@ function bpDeltaBuildColumnLine(string $column, string $definition): string
         }
     }
 
-    return $line.';';
+    return $line . ';';
 }
 
+/**
+ * Extract modifier value by key (e.g. foreign:users => users).
+ */
 function bpDeltaExtractModifierValue(array $modifiers, string $name): ?string
 {
     foreach ($modifiers as $modifier) {
-        if (Str::startsWith($modifier, $name.':')) {
-            return (string) Str::after($modifier, $name.':');
+        if (Str::startsWith($modifier, $name . ':')) {
+            return (string)Str::after($modifier, $name . ':');
         }
     }
 
     return null;
 }
 
+/**
+ * Convert Blueprint default modifier values to valid PHP literals.
+ */
 function bpDeltaRenderDefaultValue(string $raw): string
 {
     $lower = strtolower($raw);
@@ -735,5 +684,5 @@ function bpDeltaRenderDefaultValue(string $raw): string
         return 'null';
     }
 
-    return "'".str_replace("'", "\\'", $raw)."'";
+    return "'" . str_replace("'", "\\'", $raw) . "'";
 }
