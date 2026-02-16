@@ -1,71 +1,10 @@
 # TestGenerateTester
 
-Deze repo is een Laravel 12 testproject om een veilige, herbruikbare setup te hebben voor **Laravel Blueprint** met **Pest**.
+Laravel 12 testproject met een herbruikbare Blueprint setup voor API-projecten.
 
-## Doel
+## Setup
 
-Een setup die je in andere projecten kunt kopieren zonder:
-
-- dubbele routes
-- onveilige migratie-regeneratie
-- inconsistente testgeneratie
-
-## Wat staat hier al goed
-
-- `laravel-shift/blueprint` is geinstalleerd (dev dependency)
-- `config/blueprint.php` staat op:
-  - Pest testgenerator
-  - geen resource collection classes
-- Blueprint stubs staan in `stubs/blueprint`
-- workflow document staat in `BLUEPRINT_WORKFLOW.md`
-
-## Dagelijkse commando's
-
-Gebruik deze Composer scripts:
-
-```bash
-composer bp:test -- drafts/posts.yaml
-composer bp:delta -- drafts/posts.yaml
-composer bp:smart -- drafts/posts.yaml
-composer bp:smart:full -- drafts/posts.yaml
-```
-
-Betekenis:
-
-- `bp:test`: alleen tests genereren
-- `bp:delta`: kleine add-column migraties maken op basis van draft-diff (met snapshot)
-- `bp:smart`: 1 command flow: eerst delta-check, daarna veilige build zonder controller/test overschrijven
-- `bp:smart:full`: zelfde flow, maar inclusief controller/test generatie
-
-## Aanbevolen manier van werken
-
-1. Maak per feature een losse draft in `drafts/`.
-2. Genereer met `composer bp:smart -- drafts/<feature>.yaml`.
-3. Voeg routes handmatig toe in `routes/api.php`.
-4. Draai `php artisan migrate` en daarna `composer test`.
-
-Voor schema-updates op bestaande tabellen:
-
-1. Eerste keer: snapshot initialiseren.
-2. Na draft-wijziging: opnieuw draaien voor een delta migration.
-
-```bash
-composer bp:delta -- drafts/<feature>.yaml
-```
-
-Volledige generatie (inclusief controllers/tests) alleen bewust gebruiken:
-
-```bash
-php artisan bp:smart drafts/<feature>.yaml --full
-```
-
-Voor details zie `BLUEPRINT_WORKFLOW.md`.
-
-## Blueprint setup overnemen in je eigen project
-
-Gebruik dit als snelle checklist in je doelproject:
-
-1. Installeer Blueprint:
+### 1. Blueprint installeren in een project
 
 ```bash
 composer require --dev laravel-shift/blueprint
@@ -73,40 +12,129 @@ php artisan vendor:publish --tag=blueprint-config
 php artisan vendor:publish --tag=blueprint-stubs
 ```
 
-2. Overschrijf met deze projectversie (custom config + stubs):
+### 2. In dit project (eerste keer)
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+```
+
+## Commands
+
+### Composer commands
+
+```bash
+composer bp:snapshot -- drafts/<feature>.yaml
+composer bp:delta -- drafts/<feature>.yaml
+composer bp:smart -- drafts/<feature>.yaml
+composer bp:smart:full -- drafts/<feature>.yaml
+composer bp:routes -- drafts/<feature>.yaml
+composer bp:test -- drafts/<feature>.yaml
+```
+
+### Uitleg
+
+- `bp:snapshot`: maakt of ververst de snapshot voor een draft (`storage/app/blueprint-delta`).
+- `bp:delta`: vergelijkt draft met snapshot en maakt alleen add-column migraties waar nodig.
+- `bp:smart`: veilige standaardflow.
+  - draait eerst delta-check
+  - genereert daarna model/factory/request/resource
+  - slaat routes over om dubbele route-regels te voorkomen
+- `bp:smart:full`: als `bp:smart`, maar inclusief controller + tests.
+- `bp:routes`: voegt alleen ontbrekende `Route::apiResource(...)` regels toe in `routes/api.php`.
+- `bp:test`: genereert alleen tests vanuit de draft.
+
+## Aanbevolen workflow
+
+1. Start per nieuwe draft met snapshot:
+
+```bash
+composer bp:snapshot -- drafts/<feature>.yaml
+```
+
+2. Dagelijks werken met:
+
+```bash
+composer bp:smart -- drafts/<feature>.yaml
+```
+
+3. Alleen als je controllers/tests bewust wilt regenereren (eerste run):
+
+```bash
+composer bp:smart:full -- drafts/<feature>.yaml
+```
+
+4. Routes synchroniseren:
+
+```bash
+composer bp:routes -- drafts/<feature>.yaml
+```
+
+## Blueprint setup overnemen in je eigen project
+
+### Basis (vendor publish)
+
+```bash
+composer require --dev laravel-shift/blueprint
+php artisan vendor:publish --tag=blueprint-config
+php artisan vendor:publish --tag=blueprint-stubs
+```
+
+### Deze projectsetup kopieren
+
+Kopieer deze onderdelen uit `TestGenerateTester` naar je doelproject:
 
 ```bash
 cp /pad/naar/TestGenerateTester/config/blueprint.php config/blueprint.php
 mkdir -p stubs/blueprint
 cp -R /pad/naar/TestGenerateTester/stubs/blueprint/. stubs/blueprint/
+
+mkdir -p app/Blueprint/Generators
+cp -R /pad/naar/TestGenerateTester/app/Blueprint/Generators/. app/Blueprint/Generators/
+
+cp /pad/naar/TestGenerateTester/app/Support/BlueprintWorkflow.php app/Support/BlueprintWorkflow.php
+cp /pad/naar/TestGenerateTester/routes/console.php routes/console.php
 ```
 
-3. Kopieer workflow + voorbeeld drafts:
+### Composer scripts overnemen
 
-```bash
-cp /pad/naar/TestGenerateTester/BLUEPRINT_WORKFLOW.md BLUEPRINT_WORKFLOW.md
-mkdir -p drafts/examples
-cp /pad/naar/TestGenerateTester/drafts/examples/post.yaml drafts/examples/post.yaml
-```
-
-4. Neem deze scripts over in `composer.json`:
+Voeg dit toe aan `composer.json` onder `scripts`:
 
 ```json
+"bp:delta": [
+  "@php artisan bp:delta"
+],
+"bp:snapshot": [
+  "@php artisan bp:snapshot"
+],
+"bp:routes": [
+  "@php artisan bp:routes:sync"
+],
 "bp:smart": [
   "@php artisan bp:smart"
 ],
 "bp:smart:full": [
   "@php artisan bp:smart --full"
-],
-"bp:delta": [
-  "@php artisan bp:delta"
-],
-"bp:test": [
-  "@php artisan blueprint:build --skip=routes --only=tests"
 ]
+"bp:test": [
+"@php artisan blueprint:build --skip=routes --only=tests"
+],
 ```
 
-## Let op
+## Demo drafts
 
-- Gebruik geen `blueprint:build -m` op projecten met bestaande migratie-historie.
-- Laat route-generatie uit in herhaalbuilds via `bp:smart` (die routes standaard niet meeneemt).
+Voor demo/presentatie staan voorbeelden in:
+
+- `drafts/examples/Member.yaml`
+- `drafts/examples/Team.yaml`
+- `drafts/examples/Skill.yaml`
+- `drafts/examples/TimeEntry.yaml`
+
+## Belangrijk
+
+- Gebruik `bp:smart` als default command.
+- Gebruik `bp:smart:full` als 1ste keer ipv `bp:smart`.
+- Gebruik `bp:snapshot` minimaal 1 keer per draft voordat je delta-gedrag verwacht.
+- Vermijd volledige route-regeneratie; gebruik `bp:routes` om alleen ontbrekende routes toe te voegen.
