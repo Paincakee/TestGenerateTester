@@ -24,25 +24,23 @@ Een setup die je in andere projecten kunt kopieren zonder:
 Gebruik deze Composer scripts:
 
 ```bash
-composer bp -- drafts/posts.yaml
-composer bp:safe -- drafts/posts.yaml
 composer bp:test -- drafts/posts.yaml
 composer bp:delta -- drafts/posts.yaml
 composer bp:smart -- drafts/posts.yaml
+composer bp:smart:full -- drafts/posts.yaml
 ```
 
 Betekenis:
 
-- `bp`: normale Blueprint build
-- `bp:safe`: build met `--skip=routes` (aanbevolen)
 - `bp:test`: alleen tests genereren
 - `bp:delta`: kleine add-column migraties maken op basis van draft-diff (met snapshot)
 - `bp:smart`: 1 command flow: eerst delta-check, daarna veilige build zonder controller/test overschrijven
+- `bp:smart:full`: zelfde flow, maar inclusief controller/test generatie
 
 ## Aanbevolen manier van werken
 
 1. Maak per feature een losse draft in `drafts/`.
-2. Genereer met `composer bp:safe -- drafts/<feature>.yaml`.
+2. Genereer met `composer bp:smart -- drafts/<feature>.yaml`.
 3. Voeg routes handmatig toe in `routes/api.php`.
 4. Draai `php artisan migrate` en daarna `composer test`.
 
@@ -94,11 +92,14 @@ cp /pad/naar/TestGenerateTester/drafts/examples/post.yaml drafts/examples/post.y
 4. Neem deze scripts over in `composer.json`:
 
 ```json
-"bp": [
-  "@php artisan blueprint:build"
+"bp:smart": [
+  "@php artisan bp:smart"
 ],
-"bp:safe": [
-  "@php artisan blueprint:build --skip=routes"
+"bp:smart:full": [
+  "@php artisan bp:smart --full"
+],
+"bp:delta": [
+  "@php artisan bp:delta"
 ],
 "bp:test": [
   "@php artisan blueprint:build --skip=routes --only=tests"
@@ -108,4 +109,4 @@ cp /pad/naar/TestGenerateTester/drafts/examples/post.yaml drafts/examples/post.y
 ## Let op
 
 - Gebruik geen `blueprint:build -m` op projecten met bestaande migratie-historie.
-- Laat route-generatie uit in herhaalbuilds (`--skip=routes`) om duplicaten te voorkomen.
+- Laat route-generatie uit in herhaalbuilds via `bp:smart` (die routes standaard niet meeneemt).

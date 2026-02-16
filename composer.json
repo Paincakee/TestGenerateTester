@@ -51,20 +51,20 @@
             "Composer\\Config::disableProcessTimeout",
             "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1 --timeout=0\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite --kill-others"
         ],
-        "bp": [
-            "@php artisan blueprint:build"
-        ],
-        "bp:safe": [
-            "@php artisan blueprint:build --skip=routes"
-        ],
         "bp:test": [
             "@php artisan blueprint:build --skip=routes --only=tests"
         ],
         "bp:delta": [
             "@php artisan bp:delta"
         ],
+        "bp:routes": [
+            "@php artisan bp:routes:sync"
+        ],
         "bp:smart": [
             "@php artisan bp:smart"
+        ],
+        "bp:smart:full": [
+            "@php artisan bp:smart --full"
         ],
         "test": [
             "@php artisan config:clear --ansi",

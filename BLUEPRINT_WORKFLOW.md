@@ -39,7 +39,7 @@ composer test
 3. Build gericht:
 
 ```bash
-composer bp:safe -- drafts/category.yaml
+composer bp:smart -- drafts/category.yaml
 ```
 
 4. Voeg routes handmatig toe in `routes/api.php`.
@@ -85,7 +85,7 @@ Gedrag:
 Gebruik altijd:
 
 ```bash
-composer bp:safe -- <draft-file>
+composer bp:smart -- <draft-file>
 ```
 
 Dit voorkomt dubbele `Route::apiResource(...)` regels.
@@ -115,7 +115,7 @@ Dan gebruikt gegenereerde code `CommentResource::collection(...)` i.p.v. aparte 
 
 - Geen `php artisan blueprint:build -m` op een project waar migrations al zijn uitgevoerd.
 - Geen full `blueprint:build` op een grote draft voor kleine wijzigingen.
-- Geen automatische route generatie in herhaalbuilds (`composer bp:safe` gebruiken).
+- Geen automatische route generatie in herhaalbuilds (`composer bp:smart` gebruiken).
 
 ## Aanbevolen mapstructuur
 

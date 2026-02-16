@@ -1,8 +1,6 @@
 <?php
-
-use App\Http\Controllers\LikeController;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\PostController;
 
 Route::middleware(['auth:sanctum'])->group(function () {
-    Route::apiResource('likes', LikeController::class);
+    Route::apiResource('posts', PostController::class);
 });

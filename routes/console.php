@@ -278,6 +278,31 @@ Artisan::command('bp:smart {draft : Path to Blueprint draft yaml} {--full : Incl
     return $exitCode;
 })->purpose('Run delta migration generation first, then execute the appropriate safe Blueprint build');
 
+Artisan::command('bp:routes:sync {draft : Path to Blueprint draft yaml}', function (string $draft) {
+    $draftPath = Str::startsWith($draft, '/')
+        ? $draft
+        : base_path($draft);
+
+    if (! File::exists($draftPath)) {
+        $this->error("Draft file not found: {$draftPath}");
+
+        return self::FAILURE;
+    }
+
+    $result = bpSyncApiRoutesFromDraft($draftPath);
+
+    if ($result['added_routes'] === 0) {
+        $this->info('No new api routes found. routes/api.php unchanged.');
+
+        return self::SUCCESS;
+    }
+
+    $this->info('Added routes: '.$result['added_routes']);
+    $this->line('Added imports: '.$result['added_imports']);
+
+    return self::SUCCESS;
+})->purpose('Append only missing apiResource routes from draft to routes/api.php');
+
 /**
  * @param array<string, mixed> $models
  *
@@ -485,6 +510,142 @@ function bpDraftNeedsCreateMigrations(string $draftPath): bool
     }
 
     return false;
+}
+
+/**
+ * @return array{added_routes: int, added_imports: int}
+ */
+function bpSyncApiRoutesFromDraft(string $draftPath): array
+{
+    $controllers = bpDraftApiControllers($draftPath);
+
+    if ($controllers === []) {
+        return [
+            'added_routes' => 0,
+            'added_imports' => 0,
+        ];
+    }
+
+    $apiPath = base_path('routes/api.php');
+
+    if (! File::exists($apiPath)) {
+        File::put($apiPath, <<<PHP
+<?php
+
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:sanctum'])->group(function () {
+});
+PHP
+        );
+    }
+
+    $content = (string) File::get($apiPath);
+
+    preg_match_all("/Route::apiResource\\('([^']+)'\\s*,\\s*[A-Za-z0-9_\\\\\\\\]+::class\\);/", $content, $existingMatches);
+    $existingSlugs = $existingMatches[1] ?? [];
+    $existingSlugs = array_map(static fn (string $slug) => strtolower($slug), $existingSlugs);
+
+    $missing = [];
+    foreach ($controllers as $slug => $controllerClass) {
+        if (! in_array(strtolower($slug), $existingSlugs, true)) {
+            $missing[$slug] = $controllerClass;
+        }
+    }
+
+    if ($missing === []) {
+        return [
+            'added_routes' => 0,
+            'added_imports' => 0,
+        ];
+    }
+
+    ksort($missing);
+
+    preg_match_all('/^use\s+([^;]+);$/m', $content, $useMatches);
+    $existingUses = $useMatches[1] ?? [];
+
+    $addedImports = 0;
+    foreach ($missing as $controllerClass) {
+        $import = 'App\\Http\\Controllers\\'.$controllerClass;
+        if (! in_array($import, $existingUses, true)) {
+            $insertPos = strpos($content, 'Route::middleware(');
+            if ($insertPos === false) {
+                $insertPos = strlen($content);
+            }
+
+            $content = substr($content, 0, $insertPos)
+                .'use '.$import.';'.PHP_EOL
+                .substr($content, $insertPos);
+            $existingUses[] = $import;
+            $addedImports++;
+        }
+    }
+
+    if (! str_contains($content, "Route::middleware(['auth:sanctum'])->group(function () {")) {
+        $content = rtrim($content).PHP_EOL.PHP_EOL."Route::middleware(['auth:sanctum'])->group(function () {".PHP_EOL.'});'.PHP_EOL;
+    }
+
+    $routeLines = array_map(
+        static fn (string $slug, string $controllerClass): string => "    Route::apiResource('{$slug}', {$controllerClass}::class);",
+        array_keys($missing),
+        array_values($missing)
+    );
+
+    $groupPattern = "/Route::middleware\\(\\['auth:sanctum'\\]\\)->group\\(function\\s*\\(\\)\\s*\\{([\\s\\S]*?)\\}\\);/";
+    $content = (string) preg_replace_callback(
+        $groupPattern,
+        static function (array $matches) use ($routeLines): string {
+            $currentBody = trim($matches[1]);
+            $newBody = $currentBody === ''
+                ? implode(PHP_EOL, $routeLines)
+                : $currentBody.PHP_EOL.implode(PHP_EOL, $routeLines);
+
+            return "Route::middleware(['auth:sanctum'])->group(function () {".PHP_EOL
+                .$newBody.PHP_EOL
+                .'});';
+        },
+        $content,
+        1
+    );
+
+    File::put($apiPath, rtrim($content).PHP_EOL);
+
+    return [
+        'added_routes' => count($missing),
+        'added_imports' => $addedImports,
+    ];
+}
+
+/**
+ * @return array<string, string> slug => controller class basename
+ */
+function bpDraftApiControllers(string $draftPath): array
+{
+    $parsed = Yaml::parseFile($draftPath);
+    $controllers = is_array($parsed['controllers'] ?? null) ? $parsed['controllers'] : [];
+
+    $result = [];
+
+    foreach ($controllers as $controllerName => $definition) {
+        if (! is_array($definition)) {
+            continue;
+        }
+
+        if (($definition['resource'] ?? null) !== 'api') {
+            continue;
+        }
+
+        $base = (string) Str::of((string) $controllerName)->afterLast('\\')->afterLast('/')->trim();
+        if ($base === '') {
+            continue;
+        }
+
+        $slug = Str::plural(Str::kebab($base));
+        $result[$slug] = $base.'Controller';
+    }
+
+    return $result;
 }
 
 function bpDeltaBuildColumnLine(string $column, string $definition): string
