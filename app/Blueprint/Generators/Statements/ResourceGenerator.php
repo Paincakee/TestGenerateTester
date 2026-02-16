@@ -37,6 +37,40 @@ class ResourceGenerator extends \Blueprint\Generators\Statements\ResourceGenerat
         return $this->output;
     }
 
+    protected function populateStub(string $stub, Controller $controller, ResourceStatement $resource): string
+    {
+        $namespace = config('blueprint.namespace')
+            . '\\Http\\Resources'
+            . ($controller->namespace() ? '\\' . $controller->namespace() : '');
+
+        $imports = ['use Illuminate\\Http\\Request;'];
+        $imports[] = $resource->collection() && $resource->generateCollectionClass()
+            ? 'use Illuminate\\Http\\Resources\\Json\\ResourceCollection;'
+            : 'use Illuminate\\Http\\Resources\\Json\\JsonResource;';
+
+        $mixin = '';
+        $context = Str::singular($resource->reference());
+        $model = $this->tree->modelForContext($context, true);
+        if ($model !== null) {
+            $modelClass = $model->name();
+            $imports[] = 'use ' . $model->fullyQualifiedClassName() . ';';
+            $mixin = '/** @mixin ' . $modelClass . ' */';
+        }
+
+        $imports = array_values(array_unique($imports));
+        sort($imports);
+
+        $stub = str_replace('{{ namespace }}', $namespace, $stub);
+        $stub = str_replace('{{ imports }}', implode(PHP_EOL, $imports), $stub);
+        $stub = str_replace('{{ parentClass }}', $resource->collection() && $resource->generateCollectionClass() ? 'ResourceCollection' : 'JsonResource', $stub);
+        $stub = str_replace('{{ class }}', $resource->name(), $stub);
+        $stub = str_replace('{{ resource }}', $resource->collection() && $resource->generateCollectionClass() ? 'resource collection' : 'resource', $stub);
+        $stub = str_replace('{{ body }}', $this->buildData($resource), $stub);
+        $stub = str_replace('{{ mixin }}', $mixin, $stub);
+
+        return $stub;
+    }
+
     protected function buildData(ResourceStatement $resource): string
     {
         $context = Str::singular($resource->reference());

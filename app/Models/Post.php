@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Collection;
  * @property int $id
  * @property string $name
  * @property string $description
+ * @property string $tester
  * @property int $user_id
  * @property Carbon $archived_at
  * @property Carbon $created_at
@@ -37,6 +38,7 @@ class Post extends Model
     protected $fillable = [
         'name',
         'description',
+        'tester',
         'user_id',
         'archived_at',
     ];

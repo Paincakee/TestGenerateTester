@@ -17,6 +17,7 @@ class PostStoreRequest extends FormRequest
         return [
             'name' => ['required', 'string'],
             'description' => ['required', 'string'],
+            'tester' => ['required', 'string'],
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'archived_at' => ['nullable'],
         ];

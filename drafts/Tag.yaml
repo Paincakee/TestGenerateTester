@@ -2,7 +2,7 @@ models:
   Tag:
     name: string unique
     relationships:
-      belongsToMany: Post
+      belongsToMany: Post:&PostTag
 
 controllers:
   Tag:

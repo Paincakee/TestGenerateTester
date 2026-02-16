@@ -4,6 +4,7 @@ namespace {{ namespace }};
 
 {{ imports }}
 
+{{ mixin }}
 class {{ class }} extends {{ parentClass }}
 {
     /**

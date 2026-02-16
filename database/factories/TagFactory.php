@@ -2,13 +2,12 @@
 
 namespace Database\Factories;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Post>
+ * @extends Factory<Tag>
  */
-class PostFactory extends Factory
+class TagFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -19,10 +18,6 @@ class PostFactory extends Factory
     {
         return [
             'name' => fake()->name(),
-            'description' => fake()->text(),
-            'tester' => fake()->text(),
-            'user_id' => User::factory(),
-            'archived_at' => fake()->dateTime(),
         ];
     }
 }

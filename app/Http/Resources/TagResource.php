@@ -2,12 +2,10 @@
 
 namespace App\Http\Resources;
 
-use App\Models\Post;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin Post */
-class PostResource extends JsonResource
+class TagResource extends JsonResource
 {
     /**
      * Transform the resource into an array.
@@ -21,12 +19,6 @@ class PostResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'description' => $this->description,
-            'tester' => $this->tester,
-            'user_id' => $this->user_id,
-            'archived_at' => $this->archived_at,
-            'user' => new UserResource($this->whenLoaded('user')),
-            'likes' => LikeResource::collection($this->whenLoaded('likes')),
         ];
     }
 }
