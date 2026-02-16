@@ -72,6 +72,89 @@ composer bp:smart:full -- drafts/<feature>.yaml
 composer bp:routes -- drafts/<feature>.yaml
 ```
 
+## Drafts structuur
+
+Gebruik kleine, losse drafts per feature/model zodat builds voorspelbaar blijven.
+
+Voorbeeld:
+
+```text
+drafts/
+  post.yaml
+  member.yaml
+  team.yaml
+  skill.yaml
+  time_entry.yaml
+```
+
+Voor demo's kun je een submap gebruiken:
+
+```text
+drafts/
+  examples/
+    Project.yaml
+    Member.yaml
+    Team.yaml
+    Skill.yaml
+    TimeEntry.yaml
+    Pricing.yaml
+```
+
+Praktische regels:
+
+- Houd 1 hoofdonderwerp per draft aan.
+- Zet alleen modellen in de draft die je in die run wilt genereren/updaten.
+- Gebruik `bp:snapshot` voordat je delta-gedrag verwacht op die draft.
+
+## Pivot model in drafts
+
+Als je een `belongsToMany` met eigen pivot model wilt (handig voor extra velden, casts, linter/phpstan generics), gebruik dan `:&PivotModel`.
+
+Voorbeeld (zoals in `drafts/examples/Member.yaml`):
+
+### Member
+```yaml
+models:
+  Member:
+    team_id: id foreign:teams
+    name: string
+    relationships:
+      belongsTo: Team
+      belongsToMany: Skill:&MemberSkill
+
+  MemberSkill:
+    member_id: id foreign:members
+    skill_id: id foreign:skills
+    level: enum:junior,medior,senior,lead
+    hourly_price: decimal:10,2
+    certified_at: datetime nullable
+    relationships:
+      belongsTo: Member, Skill
+```
+### Skill
+```yaml
+models:
+  Skill:
+    name: string unique
+    category: enum:backend,frontend,devops,design,qa
+    default_rate: decimal:10,2 nullable
+    active_from: datetime nullable
+    relationships:
+      belongsToMany: Member:&MemberSkill
+
+controllers:
+  Skill:
+    resource: api
+
+```
+
+
+Wat dit doet:
+
+- `Member` krijgt `belongsToMany` naar `Skill` met pivot model `MemberSkill`.
+- `MemberSkill` wordt als eigen model gegenereerd voor de pivot tabel.
+- Je kunt in het pivot model eigen velden zoals `decimal`, `datetime` zetten.
+
 ## Blueprint setup overnemen in je eigen project
 
 ### Basis (vendor publish)
@@ -117,7 +200,7 @@ Voeg dit toe aan `composer.json` onder `scripts`:
 ],
 "bp:smart:full": [
   "@php artisan bp:smart --full"
-]
+],
 "bp:test": [
 "@php artisan blueprint:build --skip=routes --only=tests"
 ],
