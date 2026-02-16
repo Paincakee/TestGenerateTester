@@ -221,3 +221,7 @@ Voor demo/presentatie staan voorbeelden in:
 - Gebruik `bp:smart:full` als 1ste keer ipv `bp:smart`.
 - Gebruik `bp:snapshot` minimaal 1 keer per draft voordat je delta-gedrag verwacht.
 - Vermijd volledige route-regeneratie; gebruik `bp:routes` om alleen ontbrekende routes toe te voegen.
+
+## Meer info
+
+Voor overige Blueprint-vragen: https://blueprint.laravelshift.com/docs/getting-started/
