@@ -1,0 +1,11 @@
+<?php
+
+namespace {{ namespace }};
+
+use App\Models\User;
+{{ imports }}
+
+class {{ class }}
+{
+    {{ methods }}
+}

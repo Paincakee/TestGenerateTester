@@ -1,0 +1,9 @@
+models:
+  Tag:
+    name: string unique
+    relationships:
+      belongsToMany: Post
+
+controllers:
+  Tag:
+    resource: api

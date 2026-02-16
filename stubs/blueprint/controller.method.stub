@@ -1,0 +1,7 @@
+    /**
+     * Handle the {{ method }} request.
+     */
+    public function {{ method }}(Request $request): Response
+    {
+        {{ body }}
+    }

@@ -1,0 +1,16 @@
+models:
+  Post:
+    name: string
+    description: text
+    test: text
+    jaja: text
+    user_id: id foreign:users
+    archived_at: datetime nullable
+    relationships:
+      belongsTo: User
+      belongsToMany: Tag
+      hasMany: Comment, Like
+
+controllers:
+  Post:
+    resource: api
