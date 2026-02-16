@@ -1,9 +1,0 @@
-models:
-  Category:
-    name: string unique
-    relationships:
-      belongsToMany: Post
-
-controllers:
-  Category:
-    resource: api

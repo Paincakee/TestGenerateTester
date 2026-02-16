@@ -1,0 +1,12 @@
+models:
+  Team:
+    name: string
+    code: string unique
+    active_from: datetime
+    budget: decimal:12,2 nullable
+    relationships:
+      hasMany: Member
+
+controllers:
+  Team:
+    resource: api

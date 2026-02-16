@@ -1,0 +1,15 @@
+models:
+  TimeEntry:
+    member_id: id foreign:members
+    worked_on: date
+    started_at: datetime
+    ended_at: datetime
+    hours: decimal:6,2
+    billable_rate: decimal:10,2
+    note: text nullable
+    relationships:
+      belongsTo: Member
+
+controllers:
+  TimeEntry:
+    resource: api

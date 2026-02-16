@@ -1,0 +1,12 @@
+models:
+  Skill:
+    name: string unique
+    category: enum:backend,frontend,devops,design,qa
+    default_rate: decimal:10,2 nullable
+    active_from: datetime nullable
+    relationships:
+      belongsToMany: Member:&MemberSkill
+
+controllers:
+  Skill:
+    resource: api

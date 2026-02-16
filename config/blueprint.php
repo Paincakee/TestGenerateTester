@@ -172,7 +172,7 @@ return [
     */
     'generators' => [
         'controller' => \App\Blueprint\Generators\ControllerGenerator::class,
-        'factory' => \Blueprint\Generators\FactoryGenerator::class,
+        'factory' => \App\Blueprint\Generators\FactoryGenerator::class,
         'migration' => \Blueprint\Generators\MigrationGenerator::class,
         'model' => \App\Blueprint\Generators\ModelGenerator::class,
         'route' => \App\Blueprint\Generators\RouteGenerator::class,
