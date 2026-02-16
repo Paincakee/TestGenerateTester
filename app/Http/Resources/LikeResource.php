@@ -5,7 +5,7 @@ namespace App\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class PostResource extends JsonResource
+class LikeResource extends JsonResource
 {
     /**
      * Transform the resource into an array.
@@ -18,12 +18,9 @@ class PostResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'name' => $this->name,
-            'description' => $this->description,
+            'post_id' => $this->post_id,
             'user_id' => $this->user_id,
-            'archived_at' => $this->archived_at,
             'user' => new UserResource($this->whenLoaded('user')),
-            'likes' => LikeResource::collection($this->whenLoaded('likes')),
         ];
     }
 }

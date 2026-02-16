@@ -119,6 +119,7 @@ return [
     'types' => [
         'primary' => 'id',
         'timestamps' => 'timestamp',
+        'softDeletes' => 'softDeletes',
     ],
 
     /*

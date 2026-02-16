@@ -18,7 +18,9 @@ class ModelGenerator extends \Blueprint\Generators\ModelGenerator
         }
 
         $generated = parent::populateStub($stub, $model);
+        $generated = $this->forcePivotModelWhenAliased($generated, $model);
         $generated = str_replace('\\'.Carbon::class, 'Carbon', $generated);
+        $generated = $this->addRelationshipPropertyReads($generated);
 
         return $this->addRelationshipDocblocks($generated);
     }
@@ -107,9 +109,16 @@ class ModelGenerator extends \Blueprint\Generators\ModelGenerator
                     $relatedClass = Str::afterLast(Str::before($firstArgument, '::class'), '\\');
                 }
 
-                $genericReturn = $relatedClass !== null
-                    ? $returnType . '<' . $relatedClass . ', $this>'
-                    : $returnType;
+                $pivotClass = null;
+                if ($returnType === 'BelongsToMany' && preg_match('/->using\(([^)]+)::class\)/', $body, $pivotMatch)) {
+                    $pivotClass = Str::afterLast(trim($pivotMatch[1]), '\\');
+                }
+
+                if ($relatedClass !== null) {
+                    $genericReturn = $returnType . '<' . $relatedClass . ', $this' . ($pivotClass !== null ? ', ' . $pivotClass : '') . '>';
+                } else {
+                    $genericReturn = $returnType;
+                }
 
                 $docblock = $indent . '/**' . PHP_EOL
                     . $indent . ' * @return ' . $genericReturn . PHP_EOL
@@ -119,5 +128,118 @@ class ModelGenerator extends \Blueprint\Generators\ModelGenerator
             },
             $content
         );
+    }
+
+    private function addRelationshipPropertyReads(string $content): string
+    {
+        preg_match('/\/\*\*[\s\S]*?\*\//', $content, $docMatch);
+        if (! isset($docMatch[0])) {
+            return $content;
+        }
+
+        $classDoc = $docMatch[0];
+        $propertyLines = [];
+        $usesToMany = false;
+
+        preg_match_all(
+            '/public function (\w+)\(\): ([A-Za-z_\\\\]+)\R\s*\{\R\s*return \$this->([a-zA-Z_]\w*)\(([^)]*)\)/m',
+            $content,
+            $matches,
+            PREG_SET_ORDER
+        );
+
+        foreach ($matches as $match) {
+            $property = $match[1];
+            $relationType = $match[3];
+            $args = $match[4] ?? '';
+
+            $relatedClass = 'mixed';
+            if (preg_match('/([A-Za-z_\\\\]+)::class/', $args, $relatedMatch)) {
+                $relatedClass = Str::afterLast($relatedMatch[1], '\\');
+            }
+
+            if (in_array($relationType, ['hasMany', 'belongsToMany', 'morphMany', 'morphToMany', 'morphedByMany'], true)) {
+                $type = "Collection<int, {$relatedClass}>";
+                $usesToMany = true;
+            } elseif (in_array($relationType, ['belongsTo', 'hasOne', 'morphOne', 'morphTo'], true)) {
+                $type = "{$relatedClass}|null";
+            } else {
+                $type = $relatedClass;
+            }
+
+            $line = " * @property-read {$type} \${$property}";
+            if (! str_contains($classDoc, $line)) {
+                $propertyLines[] = $line;
+            }
+        }
+
+        if ($propertyLines === []) {
+            return $content;
+        }
+
+        if ($usesToMany && ! str_contains($content, 'use Illuminate\\Database\\Eloquent\\Collection;')) {
+            $content = preg_replace(
+                '/((?:^use [^;]+;\R)+)/m',
+                "$1use Illuminate\\Database\\Eloquent\\Collection;\n",
+                $content,
+                1
+            ) ?? $content;
+        }
+
+        $updatedDoc = rtrim(substr($classDoc, 0, -3));
+        foreach ($propertyLines as $line) {
+            $updatedDoc .= PHP_EOL.$line;
+        }
+        $updatedDoc .= PHP_EOL.' */';
+
+        return str_replace($classDoc, $updatedDoc, $content);
+    }
+
+    private function forcePivotModelWhenAliased(string $content, Model $model): string
+    {
+        if (! $this->isPivotAliasModel($model)) {
+            return $content;
+        }
+
+        $content = str_replace(
+            'use Illuminate\\Database\\Eloquent\\Model;',
+            'use Illuminate\\Database\\Eloquent\\Relations\\Pivot;',
+            $content
+        );
+
+        $content = str_replace(
+            'class '.$model->name().' extends Model',
+            'class '.$model->name().' extends Pivot',
+            $content
+        );
+
+        if (! str_contains($content, 'protected $table =')) {
+            $tableStub = str_replace('{{ name }}', $model->tableName(), $this->filesystem->stub('model.table.stub'));
+            $content = str_replace('use HasFactory;' . PHP_EOL, 'use HasFactory;' . PHP_EOL . PHP_EOL . $tableStub . PHP_EOL, $content);
+        }
+
+        return $content;
+    }
+
+    private function isPivotAliasModel(Model $targetModel): bool
+    {
+        $target = strtolower($targetModel->name());
+
+        foreach ($this->tree->models() as $model) {
+            foreach (($model->relationships()['belongsToMany'] ?? []) as $reference) {
+                if (! str_contains($reference, ':&')) {
+                    continue;
+                }
+
+                $alias = Str::after($reference, ':&');
+                $alias = Str::afterLast($alias, '\\');
+
+                if (strtolower($alias) === $target) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

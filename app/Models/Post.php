@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * @property int $id
@@ -18,6 +19,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property Carbon $archived_at
  * @property Carbon $created_at
  * @property Carbon $updated_at
+ * @property-read User|null $user
+ * @property-read Collection<int, Tag> $tags
+ * @property-read Collection<int, Comment> $comments
+ * @property-read Collection<int, Like> $likes
  */
 class Post extends Model
 {
@@ -57,11 +62,15 @@ class Post extends Model
     }
 
     /**
-     * @return BelongsToMany<Tag, $this>
+     * @return BelongsToMany<Tag, $this, PostTag>
      */
     public function tags(): BelongsToMany
     {
-        return $this->belongsToMany(Tag::class);
+        return $this->belongsToMany(Tag::class)
+            ->using(PostTag::class)
+            ->as('post_tag')
+            ->withPivot('id', 'post_id', 'tag_id')
+            ->withTimestamps();
     }
 
     /**

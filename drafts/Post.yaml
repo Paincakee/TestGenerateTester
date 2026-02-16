@@ -6,8 +6,16 @@ models:
     archived_at: datetime nullable
     relationships:
       belongsTo: User
-      belongsToMany: Tag
+      belongsToMany: Tag:&PostTag
       hasMany: Comment, Like
+
+  PostTag:
+    post_id: id foreign:posts
+    tag_id: id foreign:tags
+    relationships:
+      belongsTo: Post, Tag
+    indexes:
+      - unique: post_id,tag_id
 
 controllers:
   Post:
