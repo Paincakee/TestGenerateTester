@@ -2,8 +2,6 @@ models:
   Post:
     name: string
     description: text
-    test: text
-    jaja: text
     user_id: id foreign:users
     archived_at: datetime nullable
     relationships:

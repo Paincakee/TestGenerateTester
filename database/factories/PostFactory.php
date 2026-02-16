@@ -20,8 +20,6 @@ class PostFactory extends Factory
         return [
             'name' => fake()->name(),
             'description' => fake()->text(),
-            'test' => fake()->text(),
-            'jaja' => fake()->text(),
             'user_id' => User::factory(),
             'archived_at' => fake()->dateTime(),
         ];

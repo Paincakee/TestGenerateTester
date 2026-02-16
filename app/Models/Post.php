@@ -14,8 +14,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $id
  * @property string $name
  * @property string $description
- * @property string $test
- * @property string $jaja
  * @property int $user_id
  * @property Carbon $archived_at
  * @property Carbon $created_at
@@ -34,8 +32,6 @@ class Post extends Model
     protected $fillable = [
         'name',
         'description',
-        'test',
-        'jaja',
         'user_id',
         'archived_at',
     ];
