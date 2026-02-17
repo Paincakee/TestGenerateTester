@@ -1,0 +1,6 @@
+    /**
+     * The attributes that aren't mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $guarded = [];

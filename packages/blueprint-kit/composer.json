@@ -1,0 +1,27 @@
+{
+    "name": "richardvullings/blueprint-kit",
+    "description": "Reusable Blueprint generators, stubs and workflow commands for Laravel API projects.",
+    "type": "library",
+    "version": "0.1.0",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^12.0",
+        "laravel-shift/blueprint": "^2.13",
+        "symfony/yaml": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "RichardVullings\\BlueprintKit\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "RichardVullings\\BlueprintKit\\BlueprintKitServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
