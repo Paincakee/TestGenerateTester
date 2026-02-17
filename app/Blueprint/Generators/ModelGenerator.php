@@ -18,6 +18,7 @@ class ModelGenerator extends \Blueprint\Generators\ModelGenerator
         }
 
         $generated = parent::populateStub($stub, $model);
+        $generated = $this->removeBelongsToManyAsAlias($generated);
         $generated = $this->forcePivotModelWhenAliased($generated, $model);
         $generated = str_replace('\\'.Carbon::class, 'Carbon', $generated);
         $generated = $this->addRelationshipPropertyReads($generated);
@@ -219,6 +220,15 @@ class ModelGenerator extends \Blueprint\Generators\ModelGenerator
         }
 
         return $content;
+    }
+
+    private function removeBelongsToManyAsAlias(string $content): string
+    {
+        return preg_replace(
+            "/\\R\\s*->as\\('[^']+'\\)/",
+            '',
+            $content
+        );
     }
 
     private function isPivotAliasModel(Model $targetModel): bool
