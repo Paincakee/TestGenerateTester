@@ -11,6 +11,11 @@ class ModelGenerator extends \Blueprint\Generators\ModelGenerator
 {
     protected function populateStub(string $stub, Model $model): string
     {
+        $path = $this->getPath($model);
+        $existingContent = $this->filesystem->exists($path)
+            ? $this->filesystem->get($path)
+            : null;
+
         $this->addImport($model, 'Database\\Factories\\' . $model->name() . 'Factory');
 
         if ($this->needsCarbonImport($model)) {
@@ -22,8 +27,14 @@ class ModelGenerator extends \Blueprint\Generators\ModelGenerator
         $generated = $this->forcePivotModelWhenAliased($generated, $model);
         $generated = str_replace('\\'.Carbon::class, 'Carbon', $generated);
         $generated = $this->addRelationshipPropertyReads($generated);
+        $generated = $this->enforceExplicitBelongsToManyArguments($generated, $model);
+        $generated = $this->addRelationshipDocblocks($generated);
 
-        return $this->addRelationshipDocblocks($generated);
+        if ($existingContent !== null) {
+            $generated = $this->preserveExistingModelCustomizations($generated, $existingContent, $model);
+        }
+
+        return $generated;
     }
 
     protected function castableColumns(array $columns): array
@@ -251,5 +262,173 @@ class ModelGenerator extends \Blueprint\Generators\ModelGenerator
         }
 
         return false;
+    }
+
+    private function preserveExistingModelCustomizations(string $generated, string $existing, Model $model): string
+    {
+        $generated = $this->preserveExtendsClass($generated, $existing, $model);
+        $generated = $this->preserveTraitUses($generated, $existing);
+
+        return $this->preserveSearchableMethod($generated, $existing);
+    }
+
+    private function preserveExtendsClass(string $generated, string $existing, Model $model): string
+    {
+        $pattern = '/class\s+'.preg_quote($model->name(), '/').'\s+extends\s+([^\s{]+)/';
+        if (! preg_match($pattern, $existing, $match)) {
+            return $generated;
+        }
+
+        $existingParentClass = $match[1];
+
+        return (string) preg_replace(
+            '/class\s+'.preg_quote($model->name(), '/').'\s+extends\s+[^\s{]+/',
+            'class '.$model->name().' extends '.$existingParentClass,
+            $generated,
+            1
+        );
+    }
+
+    private function preserveTraitUses(string $generated, string $existing): string
+    {
+        preg_match_all('/^use\s+[^;]+;/m', $existing, $existingImports);
+        preg_match_all('/^use\s+[^;]+;/m', $generated, $generatedImports);
+
+        $missingImports = array_values(array_diff($existingImports[0] ?? [], $generatedImports[0] ?? []));
+        if ($missingImports !== []) {
+            $generated = $this->addImportsToGeneratedContent($generated, $missingImports);
+        }
+
+        preg_match_all('/^[ \t]{4}use\s+([A-Za-z_\\\\][A-Za-z0-9_\\\\]*)\s*;/m', $existing, $existingTraitMatches);
+        preg_match_all('/^[ \t]{4}use\s+([A-Za-z_\\\\][A-Za-z0-9_\\\\]*)\s*;/m', $generated, $generatedTraitMatches);
+
+        $existingTraits = array_unique($existingTraitMatches[1] ?? []);
+        $generatedTraits = array_unique($generatedTraitMatches[1] ?? []);
+        $missingTraits = array_values(array_diff($existingTraits, $generatedTraits));
+
+        foreach ($missingTraits as $missingTrait) {
+            $generated = $this->addTraitUseToGeneratedContent($generated, $missingTrait);
+        }
+
+        return $generated;
+    }
+
+    /**
+     * @param list<string> $imports
+     */
+    private function addImportsToGeneratedContent(string $generated, array $imports): string
+    {
+        $importsBlock = implode(PHP_EOL, $imports);
+
+        if (preg_match('/^use\s+[^;]+;\R/m', $generated) === 1) {
+            return (string) preg_replace(
+                '/((?:^use\s+[^;]+;\R)+)/m',
+                '$1'.$importsBlock.PHP_EOL,
+                $generated,
+                1
+            );
+        }
+
+        return (string) preg_replace(
+            '/^(namespace\s+[^\n]+;\R\R)/m',
+            '$1'.$importsBlock.PHP_EOL.PHP_EOL,
+            $generated,
+            1
+        );
+    }
+
+    private function addTraitUseToGeneratedContent(string $generated, string $trait): string
+    {
+        if (preg_match('/^[ \t]{4}use\s+[A-Za-z_\\\\][A-Za-z0-9_\\\\]*\s*;/m', $generated) === 1) {
+            return (string) preg_replace(
+                '/((?:^[ \t]{4}use\s+[A-Za-z_\\\\][A-Za-z0-9_\\\\]*\s*;\R)+)/m',
+                '$1    use '.$trait.';'.PHP_EOL,
+                $generated,
+                1
+            );
+        }
+
+        return (string) preg_replace(
+            '/(class\s+[^{]+\{\R)/m',
+            '$1    use '.$trait.';'.PHP_EOL.PHP_EOL,
+            $generated,
+            1
+        );
+    }
+
+    private function preserveSearchableMethod(string $generated, string $existing): string
+    {
+        if (! preg_match('/^[ \t]{4}public function searchable\(\): array\s*\{[\s\S]*?^[ \t]{4}\}/m', $existing, $match)) {
+            return $generated;
+        }
+
+        $existingSearchableMethod = $match[0];
+
+        if (preg_match('/^[ \t]{4}public function searchable\(\): array\s*\{[\s\S]*?^[ \t]{4}\}/m', $generated) === 1) {
+            return (string) preg_replace(
+                '/^[ \t]{4}public function searchable\(\): array\s*\{[\s\S]*?^[ \t]{4}\}/m',
+                $existingSearchableMethod,
+                $generated,
+                1
+            );
+        }
+
+        return (string) preg_replace('/\R\}\s*$/', PHP_EOL.PHP_EOL.$existingSearchableMethod.PHP_EOL.'}', $generated, 1);
+    }
+
+    private function enforceExplicitBelongsToManyArguments(string $content, Model $model): string
+    {
+        return (string) preg_replace_callback(
+            '/^(\s*)public function\s+([A-Za-z_]\w*)\(\):\s*BelongsToMany\s*\R\1\{\R\1\s{4}return \$this->belongsToMany\(([^)]*)\)([\s\S]*?)\;\R\1\}/m',
+            function (array $matches) use ($model): string {
+                $indent = $matches[1];
+                $rawArguments = trim($matches[3]);
+                $chain = $matches[4] ?? '';
+
+                if (str_contains($rawArguments, ',')) {
+                    return $matches[0];
+                }
+
+                if (! str_ends_with($rawArguments, '::class')) {
+                    return $matches[0];
+                }
+
+                $relatedClass = Str::afterLast(Str::before($rawArguments, '::class'), '\\');
+                if ($relatedClass === '') {
+                    return $matches[0];
+                }
+
+                $currentKey = Str::snake(Str::singular($model->name())).'_id';
+                $relatedKey = Str::snake(Str::singular($relatedClass)).'_id';
+
+                $pivotTable = null;
+                if (preg_match('/->using\(([^)]+)::class\)/', $chain, $pivotMatch)) {
+                    $pivotClass = Str::afterLast(trim($pivotMatch[1]), '\\');
+                    $pivotTable = Str::snake(Str::pluralStudly($pivotClass));
+                }
+
+                if ($pivotTable === null) {
+                    $tables = [
+                        Str::snake(Str::singular($model->name())),
+                        Str::snake(Str::singular($relatedClass)),
+                    ];
+                    sort($tables);
+                    $pivotTable = implode('_', $tables);
+                }
+
+                $relationship = '$this->belongsToMany('
+                    . PHP_EOL . $indent . '            ' . $rawArguments . ','
+                    . PHP_EOL . $indent . "            '{$pivotTable}',"
+                    . PHP_EOL . $indent . "            '{$currentKey}',"
+                    . PHP_EOL . $indent . "            '{$relatedKey}',"
+                    . PHP_EOL . $indent . '        )';
+
+                return $indent.'public function '.$matches[2].'(): BelongsToMany'.PHP_EOL
+                    .$indent.'{'.PHP_EOL
+                    .$indent.'    return '.$relationship.$chain.';'.PHP_EOL
+                    .$indent.'}';
+            },
+            $content
+        );
     }
 }
